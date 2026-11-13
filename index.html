@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RWA 스프레드 차익 대시보드 · RISEx vs TXFlow</title>
+<style>
+:root{--bg:#07090c;--panel:#10141a;--panel2:#161c24;--line:#232b36;--text:#d5dde6;--muted:#7a8694;--dim:#4d5966;
+--cyan:#3ee0c2;--green:#5ee0a0;--pink:#ff6b9a;--gold:#f0c14b;--red:#ff5d5d;--orange:#ff9f43;--blue:#6aa8ff}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);
+font:13px/1.45 ui-monospace,"SF Mono","Cascadia Code","D2Coding","Noto Sans Mono CJK KR",Menlo,Consolas,monospace}
+body{padding:16px 18px 28px}
+.wrap{max-width:1200px;margin:0 auto}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;
+border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:12px}
+.title{font-size:15px;letter-spacing:.06em}
+.title span{color:var(--muted);font-size:12px;margin-left:8px}
+.live{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.dot.on{background:var(--cyan);animation:pulse 1.6s ease-out infinite}
+.dot.err{background:var(--red)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(62,224,194,.55)}70%{box-shadow:0 0 0 8px rgba(62,224,194,0)}100%{box-shadow:0 0 0 0 rgba(62,224,194,0)}}
+.note{color:var(--dim);font-size:11px;margin:0 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);padding:11px 13px;cursor:pointer;transition:border-color .15s}
+.card:hover{border-color:#3a4552}
+.card.sel{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset}
+.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sym{font-size:16px;font-weight:700;letter-spacing:.04em}
+.sym small{color:var(--muted);font-weight:400;font-size:11px;margin-left:6px}
+.badge{font-size:11px;padding:2px 8px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.badge.wide{color:var(--orange);border-color:var(--orange)}
+.badge.narrow{color:var(--cyan);border-color:var(--cyan)}
+.badge.na{color:var(--dim)}
+.fill{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 6px}
+.fill div{background:var(--panel2);padding:6px 8px}
+.fill .k{color:var(--muted);font-size:10px;letter-spacing:.06em}
+.fill .v{white-space:nowrap;font-size:18px;font-variant-numeric:tabular-nums}
+.fill .u{color:var(--dim);font-size:11px}
+.in .v{color:var(--green)} .out .v{color:var(--pink)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.kv .k{color:var(--muted)}
+.sig{margin-top:6px;font-size:11.5px;color:var(--muted)}
+.sig b{font-weight:600}
+.sig .ENTER{color:var(--cyan)} .sig .HOLD{color:var(--gold)} .sig .EXIT{color:var(--red)} .sig .WAIT{color:var(--muted)}
+.detail{margin-top:14px;background:var(--panel);border:1px solid var(--line);padding:12px 14px}
+.dh{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.dh .t{font-size:15px;font-weight:700}
+.seg{display:flex;gap:0}
+.seg button{border-radius:0}
+.seg button.on{border-color:var(--cyan);color:var(--cyan)}
+#chart{width:100%;height:360px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:11px;margin:8px 0 4px}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px}
+.controls{display:flex;flex-wrap:wrap;gap:14px;align-items:end;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+label{color:var(--muted);font-size:11px;display:block;margin-bottom:3px}
+input[type=number],select{width:92px;background:var(--panel2);color:var(--text);border:1px solid var(--line);padding:6px 8px;font:inherit}
+select{width:auto}
+button{background:transparent;color:var(--text);border:1px solid var(--line);padding:6px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--cyan);color:var(--cyan)}
+.chk{display:flex;align-items:center;gap:6px;color:var(--text);font-size:12px;margin:0}
+.hint{color:var(--dim);font-size:11px;margin-top:8px;line-height:1.6}
+.err{color:var(--red);font-size:11px;min-height:1em;margin-top:6px}
+@media (max-width:640px){body{padding:12px 10px 24px}.cards{grid-template-columns:1fr}#chart{height:280px}.fill .v{font-size:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">RWA 스프레드 차익 <span>RISEx ↔ TXFlow · 9개 페어</span></div>
+    <div class="live"><i id="dot" class="dot"></i><span id="clock">연결 중…</span></div>
+  </header>
+  <p class="note">스프레드 = RISE − TXFlow (bps, 1bps = 0.01%). 진입(IN) = 싼 쪽 매도호가에 사고 비싼 쪽 매수호가에 팔 때 잡히는 차이, 청산(OUT) = 반대로 되돌릴 때 내는 차이. 평균·σ는 최근 7일 1시간봉 종가 기준.</p>
+  <div id="cards" class="cards"></div>
+
+  <section class="detail">
+    <div class="dh">
+      <div class="t" id="dTitle">—</div>
+      <div class="seg" id="rangeSeg">
+        <button data-r="h1" class="on">7일 · 1시간봉</button><button data-r="m5">3일 · 5분봉</button>
+      </div>
+    </div>
+    <div id="chart"></div>
+    <div class="legend">
+      <span><i style="background:#8b95a3"></i>과거 종가 스프레드(근사)</span>
+      <span><i style="background:var(--green)"></i>실시간 RISE매도·TX매수 (RISE bid − TX ask)</span>
+      <span><i style="background:var(--pink)"></i>실시간 RISE매수·TX매도 (RISE ask − TX bid)</span>
+      <span><i style="background:var(--gold)"></i>7일 평균</span>
+      <span><i style="background:var(--blue)"></i>±1σ / ±2σ</span>
+    </div>
+    <div class="controls">
+      <div><label>기준 방식</label>
+        <select id="mode"><option value="fixed">고정 bps (XAU 방식)</option><option value="sigma">평균±kσ</option></select></div>
+      <div class="fx"><label>진입: |스프레드| ≤ (bps)</label><input type="number" id="enterBps" step="0.1" min="0"></div>
+      <div class="fx"><label>청산: 진입 대비 변화 ≥ (bps)</label><input type="number" id="exitBps" step="0.1" min="0"></div>
+      <div class="sg"><label>진입: |z| ≥ k</label><input type="number" id="kIn" step="0.1" min="0"></div>
+      <div class="sg"><label>청산: |z| ≤ k</label><input type="number" id="kOut" step="0.1" min="0"></div>
+      <div><label>&nbsp;</label><label class="chk"><input type="checkbox" id="track"> 진입 추적</label></div>
+      <div><label>&nbsp;</label><button id="resetBtn">진입 리셋</button></div>
+    </div>
+    <div class="hint" id="thHint"></div>
+    <div class="hint">
+      · 과거선은 두 거래소 캔들 종가 차이라 실제 체결 스프레드와 다를 수 있어(근사). 실시간 두 선은 최우선 호가 기준이고, 브라우저를 열어둔 동안 1분마다 이 기기에 쌓여(최대 3일).<br>
+      · RISEx는 브라우저에서 REST 호출이 막혀서 호가는 웹소켓(wss://ws.rise.trade/ws)으로 받고, 과거 캔들·RISE 펀딩·RISE 거래량은 <span id="histAt">—</span> 에 만든 history.json 값이야.<br>
+      · 기준값·진입 상태는 이 브라우저에만 저장돼. 수수료는 반영 안 됨.
+    </div>
+    <div class="err" id="err"></div>
+  </section>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(() => {
+  "use strict";
+  const PAIRS = [
+    ["XAU", 17, 51, "금"], ["META", 37, 78, "메타"], ["MSTR", 29, 54, "마이크로스트래티지"], ["SPY", 27, 80, "S&P500 ETF"],
+    ["TSLA", 32, 59, "테슬라"], ["QQQ", 26, 126, "나스닥100 ETF"], ["GOOGL", 42, 101, "구글"], ["CL", 19, 53, "WTI 원유"], ["XAG", 18, 52, "은"],
+  ].map(([sym, rid, tid, ko]) => ({ sym, rid, tid, ko }));
+  const BY_RID = new Map(PAIRS.map((p) => [String(p.rid), p]));
+  const TX_INFO = "https://rpc.txflow.com/info", TX_VERSION = "2026-08-16", RISE_WS = "wss://ws.rise.trade/ws";
+  const POLL_MS = 5000, TICKER_MS = 60000, SAMPLE_MS = 60000, LIVE_KEEP_S = 3 * 86400;
+  const DEF_TH = { mode: "fixed", enterBps: 10.3, exitBps: 15.5, kIn: 2, kOut: 0.5, track: false };
+  const LS_TH = "rwaArb.th.v1", LS_ENTRY = "rwaArb.entry.v1", LS_LIVE = "rwaArb.live.v1", LS_SEL = "rwaArb.sel.v1";
+  const $ = (id) => document.getElementById(id);
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.warn("localStorage", e); } };
+  const f = (v, d = 2) => (v == null || !Number.isFinite(v) ? "—" : v.toFixed(d));
+  const sgn = (v, d = 2) => (v == null || !Number.isFinite(v) ? "—" : (v > 0 ? "+" : "") + v.toFixed(d));
+  const usdDigits = (px) => (px >= 1000 ? 2 : px >= 100 ? 3 : 4);
+  const fmtVol = (v) => v == null ? "—" : v >= 1e6 ? "$" + (v / 1e6).toFixed(2) + "M" : v >= 1e3 ? "$" + (v / 1e3).toFixed(0) + "K" : "$" + v.toFixed(0);
+  const kst = (ms) => new Date(ms).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+
+  let th = load(LS_TH, {}), entries = load(LS_ENTRY, {}), live = load(LS_LIVE, {});
+  let sel = load(LS_SEL, "XAU"); if (!BY_RID.size || !PAIRS.find((p) => p.sym === sel)) sel = "XAU";
+  let range = "h1", hist = null;
+  const S = {}; PAIRS.forEach((p) => (S[p.sym] = { rb: new Map(), ra: new Map(), tx: null, tk: null, q: null, lastSample: 0 }));
+  const thOf = (sym) => Object.assign({}, DEF_TH, th[sym] || {});
+
+  /* ---------- history (bundled, RISE REST is CORS-blocked) ---------- */
+  async function loadHistory() {
+    try {
+      const r = await fetch("history.json", { cache: "no-cache" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      hist = await r.json();
+      hist.by = {}; hist.pairs.forEach((p) => (hist.by[p.symbol] = p));
+      $("histAt").textContent = kst(hist.generated_at * 1000) + " KST";
+    } catch (e) { $("err").textContent = "history.json 로드 실패: " + e.message; hist = { by: {}, pairs: [] }; }
+  }
+  // 7d stats: bundled 1h closes + hourly means of live samples recorded after the bundle
+  function statsOf(sym) {
+    const h = hist && hist.by[sym]; const now = Date.now() / 1000; const cut = now - 7 * 86400;
+    const vals = []; let lastT = 0;
+    if (h) h.h1.forEach(([t, s]) => { if (t >= cut) vals.push(s); lastT = Math.max(lastT, t); });
+    const buckets = {};
+    (live[sym] || []).forEach(([t, m]) => { if (t > lastT + 3600 && t >= cut) { const b = Math.floor(t / 3600); (buckets[b] = buckets[b] || []).push(m); } });
+    Object.values(buckets).forEach((a) => vals.push(a.reduce((x, y) => x + y, 0) / a.length));
+    if (vals.length < 10) return null;
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (vals.length - 1));
+    return { mean, sd, n: vals.length };
+  }
+
+  /* ---------- TXFlow (REST, CORS *) ---------- */
+  async function txPost(body) {
+    const r = await fetch(TX_INFO, { method: "POST", cache: "no-store",
+      headers: { "Content-Type": "application/json", "x-api-version": TX_VERSION }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error("TXFlow HTTP " + r.status);
+    const b = await r.json(); if (b && b.success === false) throw new Error(b.message || "TXFlow 오류");
+    return b.data || b;
+  }
+  async function pollTxBooks() {
+    await Promise.all(PAIRS.map(async (p) => {
+      try {
+        const d = await txPost({ type: "l2Book", coin: String(p.tid) });
+        const lv = d.levels || [], b = (lv[0] || [])[0], a = (lv[1] || [])[0];
+        const bid = b ? num(b.px) : null, ask = a ? num(a.px) : null;
+        if (bid != null && ask != null) S[p.sym].tx = { bid, ask, ts: Date.now() };
+      } catch (e) { S[p.sym].txErr = e.message; }
+    }));
+  }
+  async function pollTickers() {
+    await Promise.all(PAIRS.map(async (p) => {
+      try { S[p.sym].tk = await txPost({ type: "marketTicker", instrumentId: p.tid }); } catch (_) {}
+    }));
+  }
+
+  /* ---------- RISEx (websocket orderbook, all 9 markets on one socket) ---------- */
+  let ws = null, wsRetry = 0, wsLast = 0;
+  function applyLevels(map, levels, snap) {
+    if (snap) map.clear();
+    (levels || []).forEach((l) => { const px = num(l.price), q = num(l.quantity); if (px == null) return; if (!q) map.delete(px); else map.set(px, q); });
+  }
+  function best(map, max) { let b = null; map.forEach((q, px) => { if (q > 0 && (b == null || (max ? px > b : px < b))) b = px; }); return b; }
+  function onWs(raw) {
+    let m; try { m = JSON.parse(raw); } catch { return; }
+    if (m.channel !== "orderbook") return;
+    const typ = m.type; if (typ !== "snapshot" && typ !== "update") return;
+    const d = m.data || {}; const p = BY_RID.get(String(m.market_id != null ? m.market_id : d.market_id)); if (!p) return;
+    const st = S[p.sym]; applyLevels(st.rb, d.bids, typ === "snapshot"); applyLevels(st.ra, d.asks, typ === "snapshot");
+    st.riseTs = Date.now(); wsLast = Date.now();
+  }
+  function startWs() {
+    if (ws && ws.readyState <= 1) return;
+    try { ws = new WebSocket(RISE_WS); } catch { return; }
+    ws.onopen = () => { wsRetry = 0; ws.send(JSON.stringify({ method: "subscribe", params: { channel: "orderbook", market_ids: PAIRS.map((p) => p.rid) } })); };
+    ws.onmessage = (ev) => onWs(ev.data);
+    ws.onclose = () => { ws = null; setTimeout(startWs, Math.min(15000, 1000 * 2 ** wsRetry++)); };
+    ws.onerror = () => { try { ws.close(); } catch (_) {} };
+  }
+  setInterval(() => { if (ws && ws.readyState === 1) { try { ws.send(JSON.stringify({ method: "ping" })); } catch (_) {} } }, 20000);
+
+  /* ---------- quote math ---------- */
+  function quote(sym) {
+    const st = S[sym]; const rb = best(st.rb, true), ra = best(st.ra, false); const tx = st.tx;
+    if (rb == null || ra == null || !tx) return null;
+    const rm = (rb + ra) / 2, tm = (tx.bid + tx.ask) / 2, M = (rm + tm) / 2, k = 1e4 / M;
+    const mid = (rm - tm) * k;                 // signed RISE − TX
+    const sellRise = (rb - tx.ask) * k;        // RISE 매도 · TX 매수 (RISE가 비쌀 때의 진입)
+    const buyRise = (ra - tx.bid) * k;         // RISE 매수 · TX 매도 (그 포지션의 청산)
+    const richRise = mid >= 0;
+    // IN/OUT in the direction "short the rich venue, long the cheap one"
+    const IN = richRise ? sellRise : (tx.bid - ra) * k, OUT = richRise ? buyRise : (tx.ask - rb) * k;
+    return { rb, ra, tbid: tx.bid, task: tx.ask, rm, tm, M, mid, sellRise, buyRise, IN, OUT, richRise };
+  }
+  function signal(sym, q, st) {
+    const t = thOf(sym), e = entries[sym];
+    const z = st && st.sd > 0 ? (q.mid - st.mean) / st.sd : null;
+    let enterOk, exitOk, desc;
+    if (t.mode === "sigma") {
+      enterOk = z != null && Math.abs(z) >= t.kIn;
+      exitOk = e && z != null && Math.abs(z) <= t.kOut;
+      desc = `진입 |z|≥${t.kIn} · 청산 |z|≤${t.kOut}`;
+    } else {
+      enterOk = Math.abs(q.mid) <= t.enterBps;
+      exitOk = e && Math.abs(q.mid - e.mid) >= t.exitBps;
+      desc = `진입 |스프레드|≤${t.enterBps}bps · 청산 변화≥${t.exitBps}bps`;
+    }
+    let state = "WAIT", text = "대기";
+    if (t.track) {
+      if (!e && enterOk) { entries[sym] = { mid: q.mid, IN: q.IN, t: Date.now(), dir: q.richRise ? "숏RISE/롱TX" : "롱RISE/숏TX" }; save(LS_ENTRY, entries); state = "ENTER"; text = "진입"; }
+      else if (e && exitOk) { state = "EXIT"; text = "청산 신호"; }
+      else if (e) { state = "HOLD"; text = "보유 중"; }
+    } else if (enterOk) { state = "ENTER"; text = "진입 조건 충족"; }
+    return { z, state, text, desc, e: entries[sym] };
+  }
+  function badge(z) {
+    if (z == null) return ['na', '데이터 부족'];
+    if (z >= 2) return ['wide', '벌어짐 z' + sgn(z, 1)];
+    if (z <= -1) return ['narrow', '좁혀짐 z' + sgn(z, 1)];
+    return ['', '보통 z' + sgn(z, 1)];
+  }
+
+  /* ---------- live samples (1/min, localStorage, 3 days) ---------- */
+  function sample() {
+    const now = Date.now(); let changed = false;
+    PAIRS.forEach((p) => {
+      const st = S[p.sym], q = st.q; if (!q || now - st.lastSample < SAMPLE_MS) return;
+      st.lastSample = now; changed = true;
+      const arr = (live[p.sym] = live[p.sym] || []);
+      arr.push([Math.floor(now / 1000), +q.mid.toFixed(2), +q.sellRise.toFixed(2), +q.buyRise.toFixed(2)]);
+      const cut = now / 1000 - LIVE_KEEP_S; while (arr.length && arr[0][0] < cut) arr.shift();
+    });
+    if (changed) { save(LS_LIVE, live); if (chartReady) drawChart(false); }
+  }
+  Object.keys(live).forEach((s) => { const a = live[s] || []; if (a.length) S[s] && (S[s].lastSample = a[a.length - 1][0] * 1000); });
+
+  /* ---------- cards ---------- */
+  const cardsEl = $("cards");
+  PAIRS.forEach((p) => {
+    const c = document.createElement("div"); c.className = "card"; c.id = "c-" + p.sym; c.dataset.sym = p.sym;
+    c.innerHTML = `<div class="ch"><div class="sym">${p.sym}<small>${p.ko}</small></div><span class="badge na">—</span></div>
+      <div class="fill"><div class="in"><div class="k">진입 IN</div><div class="v">—</div><div class="u">—</div></div>
+      <div class="out"><div class="k">청산 OUT</div><div class="v">—</div><div class="u">—</div></div></div>
+      <div class="kv"></div><div class="sig"></div>`;
+    c.onclick = () => { selectPair(p.sym); document.querySelector(".detail").scrollIntoView({ behavior: "smooth", block: "start" }); }; cardsEl.appendChild(c);
+  });
+  function renderCard(p) {
+    const c = $("c-" + p.sym), st = S[p.sym], q = st.q, stat = statsOf(p.sym), h = hist && hist.by[p.sym], tk = st.tk || {};
+    c.classList.toggle("sel", p.sym === sel);
+    const [bc, bt] = q ? badge(stat && stat.sd > 0 ? (q.mid - stat.mean) / stat.sd : null) : ["na", "대기 중"];
+    const b = c.querySelector(".badge"); b.className = "badge " + bc; b.textContent = bt;
+    const [inEl, outEl] = c.querySelectorAll(".fill > div");
+    const dg = q ? usdDigits(q.M) : 2;
+    if (q) {
+      inEl.querySelector(".v").textContent = sgn(q.IN) + " bps"; inEl.querySelector(".u").textContent = sgn(q.IN * q.M / 1e4, dg) + " USD";
+      outEl.querySelector(".v").textContent = sgn(q.OUT) + " bps"; outEl.querySelector(".u").textContent = sgn(q.OUT * q.M / 1e4, dg) + " USD";
+    }
+    const txF = num(tk.fundingRate), txIntH = (num(tk.settlementIntervalMs) || 3600000) / 3600000;
+    const riseF = h ? h.rise_funding_1h * 100 : null;
+    c.querySelector(".kv").innerHTML = `
+      <span class="k">방향</span><span>${q ? (q.richRise ? "RISE 비쌈 → 숏RISE · 롱TX" : "TX 비쌈 → 롱RISE · 숏TX") : "—"}</span>
+      <span class="k">중간 스프레드</span><span>${q ? sgn(q.mid) + " bps · " + sgn(q.mid * q.M / 1e4, dg) + " USD" : "—"}</span>
+      <span class="k">7일 평균 / σ</span><span>${stat ? sgn(stat.mean) + " / " + f(stat.sd) + " bps" : "—"}</span>
+      <span class="k">가격 RISE / TX</span><span>${q ? f(q.rm, dg) + " / " + f(q.tm, dg) : "—"}</span>
+      <span class="k">펀딩 %/h R / T</span><span>${riseF == null ? "—" : sgn(riseF, 4)}* / ${txF == null ? "—" : sgn(txF / txIntH, 4)}</span>
+      <span class="k">24h 거래량 R / T</span><span>${fmtVol(h ? h.rise_vol24h : null)}* / ${fmtVol(num(tk.dayNtlVlm))}</span>`;
+    const sg = c.querySelector(".sig");
+    if (q) { const s = signal(p.sym, q, stat); st.sig = s;
+      sg.innerHTML = `<b class="${s.state}">${s.text}</b>` + (s.e ? ` · 진입 ${sgn(s.e.mid)}bps (${kst(s.e.t)}) → 현재 차이 ${sgn(q.mid - s.e.mid)}bps` : ` · ${s.desc}`);
+    } else sg.textContent = "호가 수신 대기…";
+  }
+
+  /* ---------- detail chart ---------- */
+  let chart, sHist, sIn, sOut, sMean, bands = [], chartReady = false;
+  const TZ = 9 * 3600; // 표시용 KST 오프셋 (lightweight-charts는 UTC로 그림)
+  function initChart() {
+    if (!window.LightweightCharts) { $("err").textContent = "차트 라이브러리(CDN) 로드 실패"; return; }
+    const el = $("chart");
+    chart = LightweightCharts.createChart(el, {
+      autoSize: true, layout: { background: { color: "#10141a" }, textColor: "#7a8694", fontFamily: "ui-monospace,Menlo,monospace" },
+      grid: { vertLines: { color: "#161c24" }, horzLines: { color: "#161c24" } },
+      rightPriceScale: { borderColor: "#232b36" }, timeScale: { borderColor: "#232b36", timeVisible: true, secondsVisible: false },
+      crosshair: { mode: 0 }, localization: { priceFormatter: (v) => v.toFixed(1) + " bps" },
+    });
+    sHist = chart.addLineSeries({ color: "#8b95a3", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: "" });
+    sIn = chart.addLineSeries({ color: "#5ee0a0", lineWidth: 2, priceLineVisible: false });
+    sOut = chart.addLineSeries({ color: "#ff6b9a", lineWidth: 2, priceLineVisible: false });
+    sMean = chart.addLineSeries({ color: "#f0c14b", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    [[1, 2], [-1, 2], [2, 3], [-2, 3]].forEach(([k, style]) => bands.push({ k, s: chart.addLineSeries({ color: "rgba(106,168,255,.55)", lineWidth: 1, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }) }));
+    chartReady = true;
+  }
+  let entryLine = null;
+  function drawChart(fit) {
+    if (!chartReady) return;
+    const h = hist && hist.by[sel]; const rows = h ? h[range] : [];
+    const cut = Date.now() / 1000 - (range === "h1" ? 7 : 3) * 86400;
+    const histPts = rows.filter((r) => r[0] >= cut).map(([t, s]) => ({ time: t + TZ, value: s }));
+    const lv = (live[sel] || []).filter((r) => r[0] >= cut);
+    const dedup = (a) => { const out = []; a.forEach((p) => { if (!out.length || p.time > out[out.length - 1].time) out.push(p); }); return out; };
+    sHist.setData(dedup(histPts));
+    const q = S[sel].q; const nowT = Math.floor(Date.now() / 1000) + TZ;
+    const inPts = lv.map((r) => ({ time: r[0] + TZ, value: r[2] })), outPts = lv.map((r) => ({ time: r[0] + TZ, value: r[3] }));
+    if (q) { inPts.push({ time: nowT, value: q.sellRise }); outPts.push({ time: nowT, value: q.buyRise }); }
+    sIn.setData(dedup(inPts)); sOut.setData(dedup(outPts));
+    const st = statsOf(sel);
+    const t0 = histPts.length ? histPts[0].time : (inPts[0] ? inPts[0].time : nowT - 3600); const t1 = Math.max(nowT, t0 + 60);
+    const flat = (v) => [{ time: t0, value: v }, { time: t1, value: v }];
+    if (st) { sMean.setData(flat(st.mean)); bands.forEach((b) => b.s.setData(flat(st.mean + b.k * st.sd))); }
+    else { sMean.setData([]); bands.forEach((b) => b.s.setData([])); }
+    if (entryLine) { sMean.removePriceLine(entryLine); entryLine = null; }
+    const e = entries[sel]; if (e) entryLine = sMean.createPriceLine({ price: e.mid, color: "#3ee0c2", lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: "진입" });
+    if (fit) chart.timeScale().fitContent();
+  }
+
+  /* ---------- detail controls ---------- */
+  function syncControls() {
+    const t = thOf(sel); $("mode").value = t.mode; $("enterBps").value = t.enterBps; $("exitBps").value = t.exitBps;
+    $("kIn").value = t.kIn; $("kOut").value = t.kOut; $("track").checked = !!t.track;
+    document.querySelectorAll(".fx").forEach((n) => (n.style.display = t.mode === "fixed" ? "" : "none"));
+    document.querySelectorAll(".sg").forEach((n) => (n.style.display = t.mode === "sigma" ? "" : "none"));
+    const q = S[sel].q, st = statsOf(sel);
+    const usd = (bps) => (q ? " ≈ $" + (bps * q.M / 1e4).toFixed(usdDigits(q.M)) : "");
+    $("thHint").textContent = t.mode === "fixed"
+      ? `고정 방식: |중간 스프레드| ≤ ${t.enterBps}bps${usd(t.enterBps)} 이면 진입, 진입 시점보다 ${t.exitBps}bps${usd(t.exitBps)} 이상 움직이면 청산 (XAU $4/$6 = 10.3/15.5bps).`
+      : `σ 방식: 7일 평균에서 ${t.kIn}σ 이상 벗어나면 진입, ${t.kOut}σ 안으로 돌아오면 청산` + (st ? ` (지금 1σ = ${f(st.sd)}bps${usd(st.sd)}).` : ".");
+  }
+  function onTh() {
+    const t = thOf(sel); t.mode = $("mode").value;
+    ["enterBps", "exitBps", "kIn", "kOut"].forEach((k) => { const v = num($(k).value); if (v != null && v >= 0) t[k] = v; });
+    t.track = $("track").checked; if (!t.track) { delete entries[sel]; save(LS_ENTRY, entries); }
+    th[sel] = t; save(LS_TH, th); syncControls(); renderAll(); drawChart(false);
+  }
+  ["mode", "enterBps", "exitBps", "kIn", "kOut", "track"].forEach((id) => $(id).addEventListener("change", onTh));
+  $("resetBtn").onclick = () => { delete entries[sel]; save(LS_ENTRY, entries); renderAll(); drawChart(false); };
+  document.querySelectorAll("#rangeSeg button").forEach((b) => (b.onclick = () => {
+    range = b.dataset.r; document.querySelectorAll("#rangeSeg button").forEach((x) => x.classList.toggle("on", x === b)); drawChart(true);
+  }));
+  function selectPair(sym) {
+    sel = sym; save(LS_SEL, sym); const p = PAIRS.find((x) => x.sym === sym);
+    $("dTitle").textContent = `${sym} · ${p.ko} — 스프레드 (RISE − TXFlow, bps)`;
+    syncControls(); renderAll(); drawChart(true);
+  }
+
+  function renderAll() { PAIRS.forEach(renderCard); }
+  async function tick() {
+    startWs();
+    await pollTxBooks();
+    PAIRS.forEach((p) => (S[p.sym].q = quote(p.sym)));
+    const okN = PAIRS.filter((p) => S[p.sym].q).length;
+    const wsOk = ws && ws.readyState === 1 && Date.now() - wsLast < 120000;
+    $("dot").className = "dot " + (okN ? "on" : "err");
+    $("clock").textContent = `${okN}/9 페어 · RISE 웹소켓 ${wsOk ? "연결" : "대기"} · ${new Date().toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour12: false })} KST`;
+    sample(); renderAll(); if (chartReady) drawChart(false);
+  }
+
+  (async () => {
+    await loadHistory(); initChart(); startWs(); pollTickers();
+    selectPair(sel); tick();
+    setInterval(tick, POLL_MS); setInterval(pollTickers, TICKER_MS);
+  })();
+})();
+</script>
+</body>
+</html>
