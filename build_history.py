@@ -61,18 +61,21 @@ def series(sym, rid, tid, key):
     pts = []
     for t in sorted(set(rc) & set(tc)):
         r, x = rc[t], tc[t]
-        mid = (r + x) / 2
-        pts.append([t, round((r - x) / mid * 1e4, 3), round(mid, 6)])
+        pts.append([t, r, x])
     return sym, key, pts, len(rc), len(tc)
 
 
-def stats(vals):
+def diffs(pts):
+    return [p[1] - p[2] for p in pts]
+
+
+def stats(vals, nd=6):
     n = len(vals)
     if n < 2:
         return None
     m = sum(vals) / n
     sd = (sum((v - m) ** 2 for v in vals) / (n - 1)) ** 0.5
-    return {"n": n, "mean": round(m, 3), "std": round(sd, 3)}
+    return {"n": n, "mean": round(m, nd), "std": round(sd, nd)}
 
 
 def main():
@@ -92,16 +95,16 @@ def main():
             "rise_name": (m.get("config") or {}).get("name"),
             "rise_funding_1h": float(m.get("current_funding_rate") or 0),
             "rise_vol24h": float(m.get("quote_volume_24h") or 0),
-            "stats_h1": stats([p[1] for p in h1]),
-            "stats_m5": stats([p[1] for p in res[s]["m5"]]),
+            "stats_h1_usd": stats(diffs(h1)),
+            "stats_m5_usd": stats(diffs(res[s]["m5"])),
             "h1": h1, "m5": res[s]["m5"],
         })
     now = int(time.time())
     OUT.write_text(json.dumps({
         "generated_at": now,
         "generated_at_iso": datetime.fromtimestamp(now, timezone.utc).isoformat(),
-        "note": "spread_bps = (RISE close - TXFlow close) / mid * 1e4; candle closes (approx, not fills)",
-        "fields": ["t_sec", "spread_bps", "mid"],
+        "note": "per-timestamp candle closes of both venues; diff_usd = rise_close - tx_close (approx, not fills)",
+        "fields": ["t_sec", "rise_close", "tx_close"],
         "pairs": pairs,
     }, separators=(",", ":")))
     print("wrote", OUT, OUT.stat().st_size, "bytes")

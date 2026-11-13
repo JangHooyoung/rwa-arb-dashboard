@@ -3,7 +3,7 @@
 정적 페이지. 서버 없음, 브라우저가 거래소에 직접 연결해.
 
 - `index.html`: 대시보드
-- `history.json`: 과거 스프레드(7일 1시간봉, 3일 5분봉 종가)와 RISE 펀딩·24h 거래량 스냅샷
+- `history.json`: 과거 시점별 두 거래소 종가 `[t, rise_close, tx_close]` (7일 1시간봉, 3일 5분봉)와 RISE 펀딩·24h 거래량 스냅샷. 가격 차이 = rise_close − tx_close (USD)
 - `build_history.py`: history.json 재생성 (`python3 build_history.py`)
 
 데이터 출처
